@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sky Guardian Vertical</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #333; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            width: 100vw;
+            height: 100vh;
+            overscroll-behavior-y: contain; 
+            -webkit-touch-callout: none; 
+            -webkit-user-select: none;   
+            -khtml-user-select: none;    
+            -moz-user-select: none;      
+            -ms-user-select: none;       
+            user-select: none;           
+        }
+        canvas { 
+            background-color: #000; 
+            border: 2px solid #555; 
+            display: none; 
+            max-width: 100%;
+            max-height: 100%;
+        }
+        #inicio-screen, #game-over-screen {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 0 15px rgba(0,255,0,0.5);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        input {
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            width: calc(100% - 24px); 
+            background-color: #222;
+            color: #0f0;
+            font-size: 1em;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #008000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #005f00;
+        }
+        #downloadIcon {
+            position: fixed; 
+            bottom: 20px;
+            right: 20px;
+            font-size: 30px; 
+            cursor: pointer;
+            z-index: 100; 
+            filter: drop-shadow(0 0 5px rgba(0,255,0,0.7)); 
+            transition: transform 0.2s ease-in-out;
+            color: #fff; 
+        }
+        #downloadIcon:hover {
+            transform: scale(1.1); 
+        }
+
+        /* Controles de Gamepad Virtual adaptados para vertical */
+        #gamepadControls {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%; /* Ocupa todo el ancho inferior */
+            height: 20%; /* Ocupa un 20% del alto para los botones */
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Dos columnas para izquierda y derecha */
+            grid-template-rows: 1fr;    /* Una fila */
+            gap: 10px; /* Espacio entre botones */
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 50; 
+            display: none; 
+            justify-content: center; /* Centra los botones horizontalmente */
+            align-items: center; /* Centra los botones verticalmente */
+        }
+        .control-button {
+            background-color: rgba(50, 50, 50, 0.7); 
+            border: 2px solid #0f0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5em; /* Tamaño de las flechas más grande */
+            color: #0f0;
+            cursor: pointer;
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent; 
+            touch-action: manipulation; 
+        }
+        .control-button:active { 
+            background-color: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 10px #0f0;
+        }
+        /* Media query para ocultar los controles táctiles en PC (pantallas grandes) */
+        @media (min-width: 768px) {
+            #gamepadControls {
+                display: none !important; 
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="inicio-screen">
+        <h2>SKY GUARDIAN: Desafío de Vuelo</h2>
+        <form id="playerForm">
+            <input type="text" id="nombreInput" placeholder="Ingresa tu nombre" required>
+            <input type="tel" id="telefonoInput" placeholder="Ingresa tu número de teléfono" required>
+            <button type="submit">JUGAR</button>
+        </form>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="800"></canvas> 
+    
+    <div id="gamepadControls">
+        <div class="control-button" id="leftButton">⬅️</div>
+        <div class="control-button" id="rightButton">➡️</div>
+    </div>
+
+    <div id="game-over-screen" style="display: none;">
+        <h2>¡GAME OVER!</h2>
+        <p id="finalScore"></p>
+        <button id="reiniciarMismoJugadorButton">Jugar de Nuevo</button>
+        <button id="nuevoJugadorButton">Nuevo Jugador</button>
+        <button id="salirButton">Salir del Juego</button>
+    </div>
+
+    <div id="downloadIcon" title="Descargar Registros">💾</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const inicioScreen = document.getElementById('inicio-screen');
+        const playerForm = document.getElementById('playerForm'); 
+        const nombreInput = document.getElementById('nombreInput');
+        const telefonoInput = document.getElementById('telefonoInput'); 
+
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const reiniciarMismoJugadorButton = document.getElementById('reiniciarMismoJugadorButton');
+        const nuevoJugadorButton = document.getElementById('nuevoJugadorButton');
+        const salirButton = document.getElementById('salirButton');
+        const downloadIcon = document.getElementById('downloadIcon'); 
+        const gamepadControls = document.getElementById('gamepadControls');
+
+        // Botones del gamepad virtual (solo izquierda y derecha)
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+
+        let player;
+        let playerImage = new Image();
+        playerImage.src = 'avion.png'; 
+        
+        const METEORITE_IMAGE_PATHS = [
+            'misil.png', 
+            'misil.png', 
+            'misil.png'  
+        ];
+        let meteoriteImages = []; 
+
+        let obstacles = [];
+        let score;
+        let gameInterval;
+        let obstacleSpawnInterval;
+        let gameRunning = false;
+        let allPlayerRecords = JSON.parse(localStorage.getItem('allPlayerRecords')) || []; 
+        let currentPlayer = { name: '', phone: '' }; 
+
+        const PLAYER_SIZE = 60;
+        const PLAYER_SPEED = 5; // Velocidad de movimiento horizontal del jugador
+        const OBSTACLE_MIN_SIZE = 40;
+        const OBSTACLE_MAX_SIZE = 100;
+        const OBSTACLE_SPEED_MIN = 2;
+        const OBSTACLE_SPEED_MAX = 6; // Velocidad de caída de los obstáculos
+        const OBSTACLE_SPAWN_RATE = 800; 
+
+        // Estado de los botones del gamepad (solo izquierda y derecha)
+        let buttonsPressed = {
+            'left': false,
+            'right': false
+        };
+
+        // --- Clase del Jugador (con imagen) ---
+        class Player {
+            constructor() {
+                // El jugador comienza en el centro inferior de la pantalla vertical
+                this.x = canvas.width / 2 - PLAYER_SIZE / 2;
+                this.y = canvas.height - PLAYER_SIZE - 20; // Un poco por encima del borde inferior
+                this.width = PLAYER_SIZE;
+                this.height = PLAYER_SIZE;
+            }
+
+            draw() {
+                if (playerImage.complete && playerImage.naturalWidth !== 0) {
+                    ctx.drawImage(playerImage, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = 'red'; 
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+
+            update() {
+                let dx = 0; // Solo movimiento horizontal
+                
+                if (buttonsPressed.left) dx = -PLAYER_SPEED;
+                if (buttonsPressed.right) dx = PLAYER_SPEED;
+
+                this.x += dx;
+
+                // Limitar movimiento dentro del canvas (solo horizontal)
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                // No hay límite en Y ya que el jugador no se mueve verticalmente
+            }
+        }
+
+        // --- Clase del Obstáculo (Meteorito con imagen) ---
+        class Obstacle {
+            constructor() {
+                this.width = Math.random() * (OBSTACLE_MAX_SIZE - OBSTACLE_MIN_SIZE) + OBSTACLE_MIN_SIZE;
+                this.height = this.width; 
+                // Aparecen desde arriba, en una posición X aleatoria
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height; // Comienza fuera de la pantalla, arriba
+                this.speed = Math.random() * (OBSTACLE_SPEED_MAX - OBSTACLE_SPEED_MIN) + OBSTACLE_SPEED_MIN;
+
+                this.image = meteoriteImages.length > 0 ? meteoriteImages[Math.floor(Math.random() * meteoriteImages.length)] : null;
+            }
+
+            draw() {
+                if (this.image && this.image.complete && this.image.naturalWidth !== 0) {
+                    ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = 'gray'; 
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+
+            update() {
+                this.y += this.speed; // Se mueven hacia abajo
+            }
+        }
+
+        // --- Detección de Colisiones ---
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+
+        // --- Funciones de Puntuación y Registro ---
+        function saveScore(name, score) {
+            let scores = JSON.parse(localStorage.getItem('skyGuardianScores')) || [];
+            scores.push({ name: name, score: score, phone: currentPlayer.phone }); 
+            scores.sort((a, b) => b.score - a.score); 
+            scores = scores.slice(0, 10); 
+            localStorage.setItem('skyGuardianScores', JSON.stringify(scores));
+        }
+
+        function addPlayerRecord(name, phone, score) {
+            const timestamp = new Date().toLocaleString(); 
+            allPlayerRecords.push({
+                name: name,
+                phone: phone,
+                score: score,
+                timestamp: timestamp
+            });
+            localStorage.setItem('allPlayerRecords', JSON.stringify(allPlayerRecords));
+            console.log("Registro de jugador añadido:", { name, phone, score, timestamp });
+        }
+
+        function downloadRecords() {
+            if (allPlayerRecords.length === 0) {
+                alert('No hay registros de jugadores para descargar aún.');
+                return;
+            }
+
+            let csvContent = "Fecha/Hora,Nombre,Telefono,Puntaje\n";
+            const escapeCsv = (data) => `"${String(data).replace(/"/g, '""')}"`;
+
+            allPlayerRecords.forEach(record => {
+                csvContent += `${escapeCsv(record.timestamp)},${escapeCsv(record.name)},${escapeCsv(record.phone)},${escapeCsv(record.score)}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+
+            if (link.download !== undefined) { 
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'registros_jugadores_sky_guardian.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } else {
+                alert('Tu navegador no soporta la descarga directa de archivos. Por favor, copia el contenido manualmente desde la consola (Ctrl+Shift+I o F12).');
+                console.log(csvContent);
+            }
+        }
+
+        // --- Funciones del Juego ---
+        function startGame() {
+            inicioScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            canvas.style.display = 'block'; 
+            
+            if (window.innerWidth < 768) { 
+                gamepadControls.style.display = 'grid'; 
+            } else {
+                gamepadControls.style.display = 'none'; 
+            }
+
+            player = new Player();
+            obstacles = [];
+            score = 0;
+            gameRunning = true;
+
+            buttonsPressed = { 'left': false, 'right': false }; // Reiniciar solo las flechas usadas
+
+            // Generar algunos obstáculos iniciales
+            for (let i = 0; i < 5; i++) {
+                obstacles.push(new Obstacle());
+            }
+
+            clearInterval(gameInterval);
+            clearInterval(obstacleSpawnInterval);
+
+            gameInterval = setInterval(gameLoop, 1000 / 60); 
+            obstacleSpawnInterval = setInterval(() => {
+                if (gameRunning) { 
+                    obstacles.push(new Obstacle());
+                }
+            }, OBSTACLE_SPAWN_RATE);
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(gameInterval);
+            clearInterval(obstacleSpawnInterval);
+            
+            saveScore(currentPlayer.name, Math.floor(score / 60)); 
+            addPlayerRecord(currentPlayer.name, currentPlayer.phone, Math.floor(score / 60));
+
+            finalScoreDisplay.textContent = `Puntuación Final: ${Math.floor(score / 60)} segundos`;
+            gameOverScreen.style.display = 'block';
+            canvas.style.display = 'none'; 
+            gamepadControls.style.display = 'none'; 
+        }
+
+        function gameLoop() {
+            score++;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            player.update(); 
+            player.draw();
+
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                obs.update();
+                obs.draw();
+
+                // Eliminar obstáculos que salieron de pantalla por abajo
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    i--; 
+                }
+
+                // Colisión
+                if (checkCollision(player, obs)) {
+                    endGame();
+                    return; 
+                }
+            }
+
+            ctx.fillStyle = 'white';
+            ctx.font = '24px "Press Start 2P", Arial';
+            ctx.fillText(`Puntos: ${Math.floor(score / 60)}`, 10, 30);
+        }
+
+        // --- Control de Teclado (solo para desarrollo en PC) ---
+        window.addEventListener('keydown', (e) => {
+            if (gameRunning) {
+                switch (e.key) {
+                    case 'ArrowLeft': buttonsPressed.left = true; break;
+                    case 'ArrowRight': buttonsPressed.right = true; break;
+                }
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (gameRunning) {
+                switch (e.key) {
+                    case 'ArrowLeft': buttonsPressed.left = false; break;
+                    case 'ArrowRight': buttonsPressed.right = false; break;
+                }
+            }
+        });
+
+        // --- Control Táctil (para los botones del Gamepad Virtual) ---
+        function handleButtonStart(direction) {
+            if (gameRunning) {
+                buttonsPressed[direction] = true;
+            }
+        }
+
+        function handleButtonEnd(direction) {
+            if (gameRunning) {
+                buttonsPressed[direction] = false;
+            }
+        }
+
+        // Asignar eventos táctiles y de mouse a los botones izquierdo y derecho
+        const controlButtons = [{button: leftButton, dir: 'left'}, {button: rightButton, dir: 'right'}];
+
+        controlButtons.forEach(item => {
+            const button = item.button;
+            const direction = item.dir;
+
+            button.addEventListener('touchstart', (e) => { e.preventDefault(); handleButtonStart(direction); }, { passive: false });
+            button.addEventListener('touchend', (e) => { e.preventDefault(); handleButtonEnd(direction); }, { passive: false });
+            button.addEventListener('touchcancel', (e) => { e.preventDefault(); handleButtonEnd(direction); }, { passive: false }); 
+            
+            button.addEventListener('mousedown', () => handleButtonStart(direction));
+            button.addEventListener('mouseup', () => handleButtonEnd(direction));
+            button.addEventListener('mouseleave', () => handleButtonEnd(direction)); 
+        });
+
+
+        // --- Eventos de Botones de Pantalla ---
+        playerForm.addEventListener('submit', (event) => {
+            event.preventDefault(); 
+
+            if (nombreInput.value.trim() !== '' && telefonoInput.value.trim() !== '') {
+                currentPlayer.name = nombreInput.value.trim();
+                currentPlayer.phone = telefonoInput.value.trim(); 
+                startGame();
+            } else {
+                alert('Por favor, ingresa tu nombre y número de teléfono.');
+            }
+        });
+
+        reiniciarMismoJugadorButton.addEventListener('click', () => {
+            startGame(); 
+        });
+
+        nuevoJugadorButton.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            inicioScreen.style.display = 'block';
+            playerForm.reset(); 
+            currentPlayer = { name: '', phone: '' }; 
+        });
+
+        salirButton.addEventListener('click', () => {
+            window.close(); 
+        });
+
+        // Evento para el icono de descarga
+        downloadIcon.addEventListener('click', downloadRecords);
+
+        // --- Lógica de Carga de Imágenes al Inicio ---
+        let imagesToLoad = 1 + METEORITE_IMAGE_PATHS.length; 
+        let loadedImages = 0;
+
+        function imageLoaded() {
+            loadedImages++;
+            if (loadedImages === imagesToLoad) {
+                canvas.style.display = 'none';
+                gameOverScreen.style.display = 'none';
+                inicioScreen.style.display = 'block'; 
+                gamepadControls.style.display = 'none'; 
+            }
+        }
+
+        playerImage.onload = imageLoaded;
+        playerImage.onerror = () => {
+            console.error("Error al cargar la imagen del avión. Asegúrate que 'avion.png' esté en la misma carpeta. Se usará un cuadrado rojo.");
+            imageLoaded(); 
+        };
+
+        METEORITE_IMAGE_PATHS.forEach(path => {
+            let img = new Image();
+            img.onload = () => {
+                meteoriteImages.push(img); 
+                imageLoaded();
+            };
+            img.onerror = () => {
+                console.error("Error al cargar la imagen del meteorito:", path, ". Se usará un cuadrado gris.");
+                imageLoaded(); 
+            };
+            img.src = path; 
+        });
+
+    </script>
+</body>
+</html>
