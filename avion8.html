@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Sky Guardian</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            width: 100vw;
+            height: 100vh;
+            overscroll-behavior-y: contain;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid #555;
+            display: none;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        #inicio-screen, #game-over-screen {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 0 15px rgba(0,255,0,0.5);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        input {
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            width: calc(100% - 24px);
+            background-color: #222;
+            color: #0f0;
+            font-size: 1em;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #008000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #005f00;
+        }
+        #downloadIcon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 30px;
+            cursor: pointer;
+            z-index: 100;
+            filter: drop-shadow(0 0 5px rgba(0,255,0,0.7));
+            transition: transform 0.2s ease-in-out;
+            color: #fff;
+        }
+        #downloadIcon:hover {
+            transform: scale(1.1);
+        }
+        /* Controles de Gamepad Virtual adaptados para vertical */
+        #gamepadControls {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 20%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr;
+            gap: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 50;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .control-button {
+            background-color: rgba(50, 50, 50, 0.7);
+            border: 2px solid #0f0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5em;
+            color: #0f0;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .control-button:active {
+            background-color: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 10px #0f0;
+        }
+        /* Media query para ocultar los controles táctiles en PC (pantallas grandes) */
+        @media (min-width: 768px) {
+            #gamepadControls {
+                display: none !important;
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+    <div id="inicio-screen">
+        <h2>SKY GUARDIAN: Desafío de Vuelo</h2>
+        <form id="playerForm">
+            <input type="text" id="nombreInput" placeholder="Ingresa tu nombre" required />
+            <input type="tel" id="telefonoInput" placeholder="Ingresa tu número de teléfono (9 dígitos)" maxlength="9" pattern="\d{9}" title="Debe ser un número de 9 dígitos" required />
+            <button type="submit">JUGAR</button>
+        </form>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="800"></canvas>
+
+    <div id="gamepadControls">
+        <div class="control-button" id="leftButton">⬅️</div>
+        <div class="control-button" id="rightButton">➡️</div>
+    </div>
+
+    <div id="game-over-screen" style="display: none;">
+        <h2>¡GAME OVER!</h2>
+        <p id="finalScore"></p>
+        <button id="reiniciarMismoJugadorButton">Jugar de Nuevo</button>
+        <button id="nuevoJugadorButton">Nuevo Jugador</button>
+    </div>
+
+    <div id="downloadIcon" title="Descargar Registros">💾</div>
+
+    <audio id="bgMusic" src="audio/music.mpeg" loop preload="auto"></audio>
+    <audio id="explosionSound" src="audio/explosion.mpeg" preload="auto"></audio>
+    <audio id="gameOverSound" src="audio/gameover.mpeg" preload="auto"></audio>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const inicioScreen = document.getElementById('inicio-screen');
+        const playerForm = document.getElementById('playerForm');
+        const nombreInput = document.getElementById('nombreInput');
+        const telefonoInput = document.getElementById('telefonoInput');
+
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const reiniciarMismoJugadorButton = document.getElementById('reiniciarMismoJugadorButton');
+        const nuevoJugadorButton = document.getElementById('nuevoJugadorButton');
+        const downloadIcon = document.getElementById('downloadIcon');
+        const gamepadControls = document.getElementById('gamepadControls');
+
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+
+        let player;
+        let playerImage = new Image();
+        playerImage.src = 'avion.png';
+
+        const METEORITE_IMAGE_PATHS = [
+            'bomb.png',
+            'bomb.png',
+            'bomb.png'
+        ];
+        let meteoriteImages = [];
+
+        let obstacles = [];
+        let score;
+        let gameInterval;
+        let obstacleSpawnInterval;
+        let gameRunning = false;
+        let currentPlayer = { name: '', phone: '' };
+
+        const PLAYER_SIZE = 60;
+        const PLAYER_SPEED = 5;
+        const OBSTACLE_MIN_SIZE = 40;
+        const OBSTACLE_MAX_SIZE = 100;
+        const OBSTACLE_SPEED_MIN = 2;
+        const OBSTACLE_SPEED_MAX = 6;
+        const OBSTACLE_SPAWN_RATE = 800;
+
+        let buttonsPressed = {
+            'left': false,
+            'right': false
+        };
+
+        // --- Referencias a los elementos de audio ---
+        const bgMusic = document.getElementById('bgMusic');
+        const explosionSound = document.getElementById('explosionSound');
+        const gameOverSound = document.getElementById('gameOverSound');
+
+        // --- Ajustar volumen (opcional, entre 0.0 y 1.0) ---
+        bgMusic.volume = 0.4; // Música de fondo más baja
+        explosionSound.volume = 0.8;
+        gameOverSound.volume = 0.8;
+
+        // --- Funciones de control de audio ---
+        function playBgMusic() {
+            bgMusic.play().catch(error => {
+                console.log("No se pudo reproducir la música de fondo automáticamente. Necesita interacción del usuario.", error);
+                // Si la música no se reproduce automáticamente, considera agregar un listener para 'canplaythrough'
+                // o asegúrate de que el primer play() se active con una interacción del usuario.
+            });
+        }
+
+        function stopBgMusic() {
+            bgMusic.pause();
+            bgMusic.currentTime = 0; // Reinicia la pista al principio
+        }
+
+        function playExplosionSound() {
+            // Clonar el nodo de audio para permitir múltiples sonidos superpuestos
+            // Si no necesitas superposición, solo `explosionSound.currentTime = 0; explosionSound.play();` es suficiente
+            const soundClone = explosionSound.cloneNode();
+            soundClone.volume = explosionSound.volume; // Mantener el volumen
+            soundClone.play().catch(error => console.log("Error al reproducir explosión:", error));
+        }
+
+        function playGameOverSound() {
+            gameOverSound.currentTime = 0; // Reinicia el sonido
+            gameOverSound.play().catch(error => console.log("Error al reproducir Game Over:", error));
+        }
+
+        // --- ¡IMPORTANTE! REEMPLAZA ESTO CON LA URL DE TU WEB APP DE APPS SCRIPT ---
+        const GOOGLE_SHEETS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz7Z2y9o-XeE-h7kxQakHipfoUpYJBki98Rl6QAK5i-8Vq5zqD9iXeKo1tdW93O8ePDZA/exec'; // <--- ¡No olvides pegar aquí tu URL!
+
+        // --- Clase del Jugador (con propiedades de círculo) ---
+        class Player {
+            constructor() {
+                this.width = PLAYER_SIZE;
+                this.height = PLAYER_SIZE;
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height - 20;
+                this.radius = this.width / 2;
+                this.centerX = this.x + this.radius;
+                this.centerY = this.y + this.radius;
+            }
+            draw() {
+                if (playerImage.complete) {
+                    ctx.drawImage(playerImage, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = 'green';
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+                // ctx.beginPath(); ctx.arc(this.centerX, this.centerY, this.radius, 0, Math.PI * 2); ctx.strokeStyle = 'blue'; ctx.stroke(); // Para depuración
+            }
+            moveLeft() {
+                this.x = Math.max(0, this.x - PLAYER_SPEED);
+                this.centerX = this.x + this.radius;
+            }
+            moveRight() {
+                this.x = Math.min(canvas.width - this.width, this.x + PLAYER_SPEED);
+                this.centerX = this.x + this.radius;
+            }
+        }
+
+        // --- Clase Obstáculo (con propiedades de círculo) ---
+        class Obstacle {
+            constructor(x, y, size, speed, image) {
+                this.x = x;
+                this.y = y;
+                this.width = size;
+                this.height = size;
+                this.speed = speed;
+                this.image = image;
+                this.radius = size / 2;
+                this.centerX = this.x + this.radius;
+                this.centerY = this.y + this.radius;
+            }
+            draw() {
+                if (this.image.complete) {
+                    ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+                // ctx.beginPath(); ctx.arc(this.centerX, this.centerY, this.radius, 0, Math.PI * 2); ctx.strokeStyle = 'blue'; ctx.stroke(); // Para depuración
+            }
+            update() {
+                this.y += this.speed;
+                this.centerY = this.y + this.radius;
+            }
+        }
+
+        // --- Cargar imágenes meteoritos ---
+        function loadMeteoriteImages() {
+            meteoriteImages = METEORITE_IMAGE_PATHS.map(path => {
+                let img = new Image();
+                img.src = path;
+                return img;
+            });
+        }
+
+        // --- Generar Obstáculo ---
+        function generateObstacle() {
+            let size = Math.floor(Math.random() * (OBSTACLE_MAX_SIZE - OBSTACLE_MIN_SIZE + 1)) + OBSTACLE_MIN_SIZE;
+            let x = Math.random() * (canvas.width - size);
+            let y = -size;
+            let speed = Math.random() * (OBSTACLE_SPEED_MAX - OBSTACLE_SPEED_MIN) + OBSTACLE_SPEED_MIN;
+            let image = meteoriteImages[Math.floor(Math.random() * meteoriteImages.length)];
+            let obstacle = new Obstacle(x, y, size, speed, image);
+            obstacles.push(obstacle);
+        }
+
+        // --- Detectar colisiones circulares ---
+        function detectCollision(circle1, circle2) {
+            const dx = circle1.centerX - circle2.centerX;
+            const dy = circle1.centerY - circle2.centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < circle1.radius + circle2.radius;
+        }
+
+        // --- Guardar registro en Google Sheets ---
+        function guardarRegistroEnGoogleSheets() {
+            const dataToSend = {
+                nombre: currentPlayer.name,
+                telefono: currentPlayer.phone,
+                score: Math.floor(score / 60),
+                fecha: new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }) // Formato de fecha para Perú
+            };
+
+            fetch(GOOGLE_SHEETS_WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dataToSend)
+            })
+            .then(response => {
+                console.log('Solicitud enviada a Google Sheets. (Respuesta no verificable en modo no-cors)');
+            })
+            .catch(error => {
+                console.error('Error al enviar el registro a Google Sheets:', error);
+                alert('Hubo un error al guardar el registro en Google Sheets. Por favor, revisa la consola para más detalles.');
+            });
+        }
+
+        // --- Finalizar juego ---
+        function finalizarJuego() {
+            gameRunning = false;
+            clearInterval(gameInterval);
+            clearInterval(obstacleSpawnInterval);
+            gameOverScreen.style.display = 'block';
+            finalScoreDisplay.textContent = `Tiempo sobrevivido: ${Math.floor(score / 60)} segundos`;
+
+            stopBgMusic();        // Detener música de fondo
+            playGameOverSound();  // Reproducir sonido de Game Over
+
+            guardarRegistroEnGoogleSheets();
+        }
+
+        // --- Reiniciar juego ---
+        function reiniciarJuego() {
+            obstacles = [];
+            score = 0;
+            player = new Player();
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            gameInterval = setInterval(gameLoop, 1000 / 60);
+            obstacleSpawnInterval = setInterval(generateObstacle, OBSTACLE_SPAWN_RATE);
+            canvas.style.display = 'block';
+        }
+
+        // --- Loop principal ---
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (buttonsPressed.left) player.moveLeft();
+            if (buttonsPressed.right) player.moveRight();
+
+            player.draw();
+
+            obstacles.forEach((obstacle, index) => {
+                obstacle.update();
+                obstacle.draw();
+
+                if (detectCollision(player, obstacle)) {
+                    playExplosionSound(); // Reproducir sonido de explosión al colisionar
+                    finalizarJuego();
+                }
+
+                if (obstacle.y > canvas.height) {
+                    obstacles.splice(index, 1);
+                }
+            });
+
+            score++;
+            ctx.fillStyle = 'lime';
+            ctx.font = '20px monospace';
+            ctx.fillText(`Tiempo: ${Math.floor(score / 60)} s`, 10, 30);
+        }
+
+        // --- Eventos controles táctiles ---
+        leftButton.addEventListener('touchstart', e => {
+            e.preventDefault();
+            buttonsPressed.left = true;
+        });
+        leftButton.addEventListener('touchend', e => {
+            e.preventDefault();
+            buttonsPressed.left = false;
+        });
+        rightButton.addEventListener('touchstart', e => {
+            e.preventDefault();
+            buttonsPressed.right = true;
+        });
+        rightButton.addEventListener('touchend', e => {
+            e.preventDefault();
+            buttonsPressed.right = false;
+        });
+
+        // --- Eventos teclado ---
+        window.addEventListener('keydown', e => {
+            if (!gameRunning) return;
+            if (e.key === 'ArrowLeft') buttonsPressed.left = true;
+            if (e.key === 'ArrowRight') buttonsPressed.right = true;
+        });
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowLeft') buttonsPressed.left = false;
+            if (e.key === 'ArrowRight') buttonsPressed.right = false;
+        });
+
+        // --- Validar y manejar formulario inicio ---
+        playerForm.addEventListener('submit', e => {
+            e.preventDefault();
+
+            const nombre = nombreInput.value.trim();
+            const telefono = telefonoInput.value.trim();
+
+            if (!nombre || !telefono || telefono.length !== 9 || !/^\d{9}$/.test(telefono)) {
+                alert('Por favor ingresa un nombre válido y un teléfono de 9 dígitos.');
+                return;
+            }
+
+            currentPlayer.name = nombre;
+            currentPlayer.phone = telefono;
+
+            inicioScreen.style.display = 'none';
+            canvas.style.display = 'block';
+            gamepadControls.style.display = 'grid';
+
+            playBgMusic(); // Iniciar la música de fondo aquí, después de la interacción del usuario
+
+            reiniciarJuego();
+        });
+
+        // --- Botones en pantalla Game Over ---
+        reiniciarMismoJugadorButton.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            playBgMusic(); // Reiniciar música al jugar de nuevo
+            reiniciarJuego();
+        });
+
+        nuevoJugadorButton.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            canvas.style.display = 'none';
+            gamepadControls.style.display = 'none';
+            inicioScreen.style.display = 'block';
+            nombreInput.value = '';
+            telefonoInput.value = '';
+            stopBgMusic(); // Asegurarse de que la música se detenga al volver a la pantalla de inicio
+        });
+
+        // --- Icono descargar registros ---
+        downloadIcon.addEventListener('click', () => {
+            alert('Los registros de juego se están guardando automáticamente en tu Google Sheet configurado.');
+        });
+
+        // --- Cargar imágenes meteoritos al inicio ---
+        loadMeteoriteImages();
+    </script>
+
+</body>
+</html>
